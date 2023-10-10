@@ -1,7 +1,5 @@
 package com.example.jwttests;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.restassured.RestAssured;
 import io.restassured.filter.log.LogDetail;
 import io.restassured.filter.log.RequestLoggingFilter;
@@ -17,8 +15,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.io.IOException;
-import java.util.Base64;
-import com.example.jwttests.domain.DecodedJWT;
 
 import static io.restassured.RestAssured.given;
 import static io.restassured.config.LogConfig.logConfig;
@@ -40,76 +36,96 @@ public class JwtTestsApplicationTests {
         this.testConfiguration = testConfiguration;
     }
 
+    public enum Env{
+        TEST,
+        SAND
+    }
 
 
-    private RequestSpecification getJwtRequest(){
+
+    private RequestSpecification blurbCoreRequestTest(){
         RequestSpecification specification = given()
                 .config(RestAssured.config()
                         .logConfig(logConfig().enableLoggingOfRequestAndResponseIfValidationFails(LogDetail.ALL)))
-                .baseUri("https://cornerstone-test-internal.builder.blurb.com")
+                .baseUri(testConfiguration.getBlurbCoreBaseUrlTest())
                 .contentType(ContentType.JSON)
                 .filter(new RequestLoggingFilter())
                 .filter(new ResponseLoggingFilter());
         return specification;
     }
 
-    private RequestSpecification connectorRequest(){
+    private RequestSpecification connectorRequestTest(){
         RequestSpecification specification = given()
                 .config(RestAssured.config()
                         .logConfig(logConfig().enableLoggingOfRequestAndResponseIfValidationFails(LogDetail.ALL)))
-                .baseUri("https://blurby-connector-test.builder.blurb.com/blurby-connector-public")
+                .baseUri(testConfiguration.getConnectorBaseUrlTest())
                 .contentType(ContentType.JSON)
                 .filter(new RequestLoggingFilter())
                 .filter(new ResponseLoggingFilter());
         return specification;
     }
 
-    private String getAccessToken(){
-        String token = getJwtRequest()
-                .body("""
+    private RequestSpecification blurbCoreRequestSandbox(){
+        RequestSpecification specification = given()
+                .config(RestAssured.config()
+                        .logConfig(logConfig().enableLoggingOfRequestAndResponseIfValidationFails(LogDetail.ALL)))
+                .baseUri(testConfiguration.getBlurbCoreBaseUrlSand())
+                .contentType(ContentType.JSON)
+                .filter(new RequestLoggingFilter())
+                .filter(new ResponseLoggingFilter());
+        return specification;
+    }
+
+    private RequestSpecification connectorRequestSandbox(){
+        RequestSpecification specification = given()
+                .config(RestAssured.config()
+                        .logConfig(logConfig().enableLoggingOfRequestAndResponseIfValidationFails(LogDetail.ALL)))
+                .baseUri(testConfiguration.getConnectorBaseUrlSand())
+                .contentType(ContentType.JSON)
+                .filter(new RequestLoggingFilter())
+                .filter(new ResponseLoggingFilter());
+        return specification;
+    }
+
+    private String getAccessToken(Env env){
+        if (env == Env.TEST){
+            String token = blurbCoreRequestTest()
+                    .body("""
                         {"username":"test-09082023",
                          "password":"Banana123"
                          }
                         """)
-                .when()
-                .post("/auth/login")
-                .then()
-                .extract()
-                .response().path("accessToken");
+                    .when()
+                    .post("/auth/login")
+                    .then()
+                    .extract()
+                    .response().path("accessToken");
 
-        return token;
-    }
+            return token;
+        }else if (env == Env.SAND){
 
-    private DecodedJWT decodeJWT() throws JsonProcessingException {
-        ObjectMapper mapper = new ObjectMapper();
-        String jwtToken = getAccessToken();
-        String[] splitString = jwtToken.split("\\.");
-        String base64EncodedHeader = splitString[0];
-        String base64EncodedPayload = splitString[1];
-        String base64EncodedSignature = splitString[2];
+            String token = blurbCoreRequestSandbox()
+                    .body("""
+                                {"username":"gorazd-21092023",
+                                 "password":"123456"
+                                 }
+                            """)
+                    .when()
+                    .post("/auth/login")
+                    .then()
+                    .extract()
+                    .response().path("accessToken");
 
-        String header = new String(Base64.getUrlDecoder().decode(base64EncodedHeader));
-        String payload = new String(Base64.getUrlDecoder().decode(base64EncodedPayload));
-        String signature = new String(Base64.getUrlDecoder().decode(base64EncodedSignature));
-
-        DecodedJWT jwt = new DecodedJWT();
-        jwt.setHeader(mapper.readTree(header));
-        jwt.setPayload(mapper.readTree(payload));
-        jwt.setSignature(mapper.readTree(signature));
-
-        return jwt;
+            return token;
+        }
+        return "Set env";
     }
 
     @Test
-    void getToken() {
-        getJwtRequest()
-                .body("""
-                        {"username":"test-09082023",
-                         "password":"Banana123"
-                         }
-                        """)
-                .when()
-                .post("/auth/login")
+    void validateTokenBlurbCore() {
+        blurbCoreRequestTest()
+                .header("Authorization", "Bearer "+getAccessToken(Env.TEST))
+                .get("/users/me")
                 .then()
                 .assertThat()
                 .statusCode(200);
@@ -117,9 +133,9 @@ public class JwtTestsApplicationTests {
     }
 
     @Test
-    void validateToken() {
-        connectorRequest()
-                .header("Authorization", "Bearer "+getAccessToken())
+    void validateTokenConnector() {
+        connectorRequestTest()
+                .header("Authorization", "Bearer "+getAccessToken(Env.TEST))
                 .get("/validate-jwt")
                 .then()
                 .assertThat()
@@ -127,10 +143,114 @@ public class JwtTestsApplicationTests {
     }
 
     @Test
-    void validateTokenNoAlg() throws JsonProcessingException {
-        DecodedJWT decodedJWT = decodeJWT();
+    void validateTokenNoAlgConnector(){
+        String tokenHeaderAlgNone = "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.";
 
-        System.out.println(decodedJWT.getHeader().findValue("alg"));
+        String validToken = getAccessToken(Env.TEST);
+        String[] splitToken = validToken.split("\\.");
+
+        String tokenAlgNone = tokenHeaderAlgNone+splitToken[1]+".";
+
+        connectorRequestTest()
+                .header("Authorization", "Bearer "+tokenAlgNone)
+                .get("/validate-jwt")
+                .then()
+                .assertThat()
+                .statusCode(403);
+    }
+
+    @Test
+    void validateTokenNoAlgBlurbCore(){
+       String tokenHeaderAlgNone = "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.";
+
+       String validToken = getAccessToken(Env.TEST);
+       String[] splitToken = validToken.split("\\.");
+
+       String tokenAlgNone = tokenHeaderAlgNone+splitToken[1]+".";
+
+        blurbCoreRequestTest()
+                .header("Authorization", "Bearer "+tokenAlgNone)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(401);
+
+    }
+
+    @Test
+    void validateTestTokenOnSandboxConnector(){
+        String token = getAccessToken(Env.TEST);
+
+        connectorRequestTest()
+                .header("Authorization", "Bearer "+token)
+                .get("/validate-jwt")
+                .then()
+                .assertThat()
+                .statusCode(200);
+
+        connectorRequestSandbox()
+                .header("Authorization", "Bearer "+token)
+                .get("/validate-jwt")
+                .then()
+                .assertThat()
+                .statusCode(403);
+    }
+
+    @Test
+    void validateSandTokenOnTestConnector(){
+        String token = getAccessToken(Env.SAND);
+
+        connectorRequestSandbox()
+                .header("Authorization", "Bearer "+token)
+                .get("/validate-jwt")
+                .then()
+                .assertThat()
+                .statusCode(200);
+
+        connectorRequestTest()
+                .header("Authorization", "Bearer "+token)
+                .get("/validate-jwt")
+                .then()
+                .assertThat()
+                .statusCode(403);
+    }
+
+    @Test
+    void validateTestTokenOnSandboxBlurbCore(){
+        String token = getAccessToken(Env.TEST);
+
+        blurbCoreRequestTest()
+                .header("Authorization", "Bearer "+token)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(200);
+
+        blurbCoreRequestSandbox()
+                .header("Authorization", "Bearer "+token)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(401);
+    }
+
+    @Test
+    void validateSandTokenOnTestBlurbCore(){
+        String token = getAccessToken(Env.SAND);
+
+        blurbCoreRequestSandbox()
+                .header("Authorization", "Bearer "+token)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(200);
+
+        blurbCoreRequestTest()
+                .header("Authorization", "Bearer "+token)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(401);
     }
 
 }

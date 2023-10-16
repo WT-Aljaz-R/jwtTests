@@ -252,5 +252,28 @@ public class JwtTestsApplicationTests {
                 .assertThat()
                 .statusCode(401);
     }
+    @Test
+     void validateBlurbCoreTokenChangedPayloadTest(){
+        String token = "eyJhbGciOiJIUzI1NiJ9.eyJlbnZpcm9ubWVudCI6InRlc3QiLCJyb2xlIjpbImJsdXJiLWNvcmU6dXNlciJdLCJibHVyYnlVc2VyUHVibGljSWQiOiJhNGViN2U2OC1mOGY3LTRmNGEtYjVkNy1jNmU3OTgzMmMyYzEiLCJpc3MiOiJibHVyYi1jb3JlIiwic3ViIjoiYmx1cmItY29yZTp0ZXN0LTA5MDgyMDIzIiwibmJmIjoxNjk3NDM3MzYzLCJqdGkiOiI1ZmFlODk4Yy1kZGE0LTRjZTgtODBjMy1lZjI4NjM4YmU5YjIiLCJhdWQiOiJibHVyYi1jb3JlIiwiaWF0IjoxNjk3NDM3MzYzLCJleHAiOjE2OTc1MjM3NjN9.2a_hEGk49_F7EAxqxlw2a2naHPDj_j0Gr4_7cr9flJY";
+
+        blurbCoreRequestTest()
+                .header("Authorization", "Bearer "+token)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(401);
+    }
+
+    @Test
+    void validateConnectorTokenChangedPayloadTest(){
+        String token = "eyJhbGciOiJIUzI1NiJ9.eyJlbnZpcm9ubWVudCI6InRlc3QiLCJyb2xlIjpbImJsdXJiLWNvcmU6dXNlciJdLCJibHVyYnlVc2VyUHVibGljSWQiOiJhNGViN2U2OC1mOGY3LTRmNGEtYjVkNy1jNmU3OTgzMmMyYzEiLCJpc3MiOiJibHVyYi1jb3JlIiwic3ViIjoiYmx1cmItY29yZTp0ZXN0LTA5MDgyMDIzIiwibmJmIjoxNjk3NDM4Mjc4LCJqdGkiOiIwY2EyODViZS1lOWJhLTRkODYtYWY4MS02ZThjOWZjNDQ3YjIiLCJhdWQiOiJibHVyYi1jb3JlIiwiaWF0IjoxNjk3NDM4Mjc4LCJleHAiOjE2OTc1MjQ2Nzh9.24l_AE2XdsUx2wkvD9vdgimujTRWx3YuxeXkax2D14M";
+
+        connectorRequestTest()
+                .header("Authorization", "Bearer "+token)
+                .get("/users/me")
+                .then()
+                .assertThat()
+                .statusCode(403);
+    }
 
 }
